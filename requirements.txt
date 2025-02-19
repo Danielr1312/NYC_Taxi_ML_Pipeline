@@ -1,0 +1,13 @@
+sagemaker
+scikit-learn
+scikit-optimize
+lightgbm
+scipy
+pandas
+numpy
+ipykernel
+matplotlib
+pyarrow
+holidays
+seaborn
+plotly
