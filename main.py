@@ -4,12 +4,11 @@ import logging
 import joblib
 import json
 from src.config import *
-from src.data_ingestion import load_taxi_data, fetch_weather_data
+from src.data_ingestion import load_taxi_data, fetch_weather_data, extract_month_from_filename
 from src.data_cleaning import *
 from src.feature_engineering import add_trip_datetime_features, add_rain_or_snow_column
 from src.preprocessing import build_preprocessing_pipeline
 from src.model_training import train_model, evaluate_model
-from utils.api_utils import extract_month_from_filename
 from sklearn.model_selection import train_test_split
 
 # Configure Logging

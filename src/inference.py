@@ -7,7 +7,7 @@ import pandas as pd
 import joblib
 import lightgbm as lgb
 from config import *
-from utils.api_utils import *
+from data_ingestion import fetch_weather_data, extract_month_from_filename
 from data_cleaning import *
 from feature_engineering import add_trip_datetime_features, add_rain_or_snow_column
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
