@@ -6,6 +6,8 @@ data/weather/
 
 # Ignore virtual environment and package cache
 venv/
+package/
+scripts/lambda_layer
 .nyc_taxi_env/
 __pycache__/
 *.pyc
@@ -22,6 +24,7 @@ reports/
 *.pkl
 *.joblib
 *.h5
+*.zip
 
 # Ignore Jupyter notebook checkpoints
 .ipynb_checkpoints/

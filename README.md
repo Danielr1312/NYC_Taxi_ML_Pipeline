@@ -80,7 +80,7 @@ python main.py
 
 ### 2. Run Inference on New Data
 ```sh
-python src/inference.py --input_file "data/raw/yellow_tripdata_2024-02.csv" --output_file "data/predictions/predictions_2024-02.csv"
+python src/inference.py --input_file "data/raw/yellow_tripdata_2024-02.parquet" --output_file "data/predictions/predictions_2024-02.csv"
 ```
 
 ## 📊 Model Performance
