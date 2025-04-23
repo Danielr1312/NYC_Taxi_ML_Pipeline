@@ -83,6 +83,79 @@ python main.py
 python src/inference.py --input_file "data/raw/yellow_tripdata_2024-02.parquet" --output_file "data/predictions/predictions_2024-02.csv"
 ```
 
+## 3. Using the FastAPI Inference API
+
+This project includes a REST API for real-time predictions via FastAPI.
+
+### 🔧 Running the API Locally
+From the project root directory, run:
+
+```bash
+uvicorn src.app:app --reload
+```
+
+Then visit:
+
+- Swagger UI: [http://localhost:8000/docs](http://localhost:8000/docs)
+- ReDoc UI: [http://localhost:8000/redoc](http://localhost:8000/redoc)
+
+### 🧪 Example API Request (Swagger or `curl`)
+You can send a request to `/predict` with a payload like:
+
+```json
+{
+  "data": [
+    {
+      "VendorID": 2,
+      "passenger_count": 1,
+      "trip_distance": 2.5,
+      "RatecodeID": 1,
+      "store_and_fwd_flag": "N",
+      "PULocationID": 186,
+      "DOLocationID": 236,
+      "payment_type": 1,
+      "tpep_pickup_datetime": 1708543608,
+      "tpep_dropoff_datetime": 1708544008,
+      "total_amount": 15.0
+    }
+  ]
+}
+```
+
+You’ll receive a response like:
+
+```json
+{
+  "predictions": [14.72]
+}
+```
+
+### 🧰 Optional: Test with Python
+```python
+import requests
+
+payload = {
+    "data": [
+        {
+            "VendorID": 2,
+            "passenger_count": 1,
+            "trip_distance": 2.5,
+            "RatecodeID": 1,
+            "store_and_fwd_flag": "N",
+            "PULocationID": 186,
+            "DOLocationID": 236,
+            "payment_type": 1,
+            "tpep_pickup_datetime": 1708543608,
+            "tpep_dropoff_datetime": 1708544008,
+            "total_amount": 15.0
+        }
+    ]
+}
+
+res = requests.post("http://localhost:8000/predict", json=payload)
+print(res.json())
+```
+
 ## 📊 Model Performance
 - The model is evaluated using **RMSE, MAE, and R²**.
 
@@ -121,6 +194,11 @@ python src/inference.py --input_file "data/raw/yellow_tripdata_2024-02.parquet" 
 - Implement **data drift detection** to monitor prediction accuracy.
 - Optimize big data processing using **Dask** or **Vaex**.
 - Factor in **major NYC events** (e.g., marathons, concerts) affecting taxi demand.
+
+---
+## Notes
+### **Automated Data Retrieval**
+There is no easily accessilbe S3 bucket for the data I would like to work with, so I attempted to use API but the data is much too large for this to be a feasible option. I may come back around to this later.
 
 ---
 🎯 **Developed for NYC Taxi Fare Prediction with Scalable ML Practices!**

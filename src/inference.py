@@ -6,10 +6,10 @@ import logging
 import pandas as pd
 import joblib
 import lightgbm as lgb
-from config import *
-from data_ingestion import fetch_weather_data, extract_month_from_filename
-from data_cleaning import *
-from feature_engineering import add_trip_datetime_features, add_rain_or_snow_column
+from src.config import *
+from src.data_ingestion import fetch_weather_data, extract_month_from_filename
+from src.data_cleaning import *
+from src.feature_engineering import add_trip_datetime_features, add_rain_or_snow_column
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
 
 
@@ -38,7 +38,7 @@ def load_preprocessor(preprocessor_path):
     logging.info("✅ Preprocessor loaded successfully!")
     return preprocessor
 
-def preprocess_input_data(input_data, preprocessor, dataset_name, api_key, weather_dir, drop_columns):
+def preprocess_input_data(input_data, preprocessor, api_key, weather_dir, drop_columns):
     """
     Cleans, processes, and applies the saved preprocessing pipeline to new input data.
 
@@ -59,20 +59,80 @@ def preprocess_input_data(input_data, preprocessor, dataset_name, api_key, weath
     label_column = "fare_amount"  # Change this to your actual label column name
     labels_available = label_column in input_data.columns
 
-    logging.info("🔄 Extracting date from dataset name...")
-    date = extract_month_from_filename(dataset_name)
-
-    # Attempt to fetch weather data
+    # 🔄 Extract date from pickup_datetime
     try:
-        weather_data = fetch_weather_data(dataset_name, api_key, weather_dir)
-        logging.info(f"✅ Weather data loaded: {weather_data.shape}")
+        if "pickup_datetime" in input_data.columns:
+            pickup_value = input_data["pickup_datetime"].iloc[0]
+        elif "tpep_pickup_datetime" in input_data.columns:
+            pickup_value = input_data["tpep_pickup_datetime"].iloc[0]
+        else:
+            raise KeyError("pickup_datetime column not found.")
+
+        logging.info(f"⏱️ Raw pickup datetime value: {pickup_value} (type: {type(pickup_value)})")
+
+        # Handle numeric timestamps (assume seconds if < 10^11, else milliseconds)
+        pickup_datetime = None
+        if np.issubdtype(type(pickup_value), np.number):
+            logging.info("🧠 Treating value as Unix timestamp in seconds.")
+            pickup_datetime = pd.to_datetime(pickup_value, unit="s")
+        elif isinstance(pickup_value, str):
+            logging.info("🧠 Treating value as ISO 8601 string.")
+            pickup_datetime = pd.to_datetime(pickup_value, errors="coerce")
+        elif isinstance(pickup_value, pd.Timestamp):
+            logging.info("🧠 Value is already a pandas Timestamp.")
+            pickup_datetime = pickup_value
+        else:
+            raise ValueError("pickup_datetime value is not numeric, string, or Timestamp.")
+
+
+        if pd.isna(pickup_datetime):
+            raise ValueError(f"Invalid datetime format: {pickup_value}")
+
+        dataset_month = pickup_datetime.strftime("%Y-%m")
+        inferred_filename = f"yellow_tripdata_{dataset_month}.parquet"
+        logging.info(f"🔄 Inferred filename month from pickup datetime: {inferred_filename}")
+
+        # Fetch weather
+        try:
+            weather_data = fetch_weather_data(inferred_filename, api_key, weather_dir)
+            logging.info(f"✅ Weather data loaded: {weather_data.shape}")
+        except Exception as e:
+            logging.warning(f"⚠️ Failed to fetch weather data: {e}")
+            weather_data = None
+
     except Exception as e:
-        logging.warning(f"⚠️ Failed to fetch weather data: {e}")
+        logging.warning(f"⚠️ Could not extract pickup_datetime or infer dataset month: {e}")
         weather_data = None
+
+
+    # logging.info("🔄 Extracting date from dataset name...")
+    # date = extract_month_from_filename(dataset_name)
+
+    # # Attempt to fetch weather data
+    # try:
+    #     weather_data = fetch_weather_data(dataset_name, api_key, weather_dir)
+    #     logging.info(f"✅ Weather data loaded: {weather_data.shape}")
+    # except Exception as e:
+    #     logging.warning(f"⚠️ Failed to fetch weather data: {e}")
+    #     weather_data = None
+
+    # ✅ Normalize datetime columns
+    datetime_columns = ["tpep_pickup_datetime", "tpep_dropoff_datetime"]
+
+    for col in datetime_columns:
+        if col in input_data.columns:
+            original_dtype = input_data[col].dtype
+            if np.issubdtype(original_dtype, np.number):
+                # Interpret as Unix timestamp in seconds
+                input_data[col] = pd.to_datetime(input_data[col], unit="s", errors="coerce")
+            else:
+                input_data[col] = pd.to_datetime(input_data[col], errors="coerce")
+
+            logging.info(f"📅 Converted '{col}' to datetime (original dtype: {original_dtype})")
 
     # 1️⃣ Clean Data
     logging.info("🧹 Cleaning input data...")
-    input_data, _ = filter_trips_by_dataset_date(input_data, dataset_name)
+    input_data, _ = filter_trips_by_dataset_date(input_data, inferred_filename)
     input_data, _ = remove_negative_total_amount(input_data)
 
     # 2️⃣ Remap Values (Ensure categorical consistency)
@@ -107,6 +167,10 @@ def preprocess_input_data(input_data, preprocessor, dataset_name, api_key, weath
     # Drop unnecessary columns
     input_data.drop(columns=drop_columns, inplace=True)
 
+    if input_data.empty:
+        logging.warning("🚫 No valid rows left after cleaning.")
+        return None, None
+
     logging.info("✅ Feature engineering completed.")
 
     # Ensure we access the ColumnTransformer inside the Pipeline
@@ -119,7 +183,16 @@ def preprocess_input_data(input_data, preprocessor, dataset_name, api_key, weath
     input_data[categorical_cols] = input_data[categorical_cols].astype(str)
 
     logging.info("🔄 Applying preprocessing pipeline...")
-    processed_data = preprocessor.transform(input_data)
+    processed_array = preprocessor.transform(input_data)
+
+    # Extract feature names from pipeline
+    feature_names = preprocessor.named_steps["preprocessor"].get_feature_names_out()
+
+    # Wrap in a DataFrame
+    processed_data = pd.DataFrame(processed_array.toarray(), columns=feature_names)
+
+    logging.info(f"✅ Preprocessing completed. Shape: {processed_data.shape}")
+
 
     return processed_data, y_true
 
@@ -171,7 +244,7 @@ def main(input_file, output_file):
     
 
     # Preprocess input data
-    processed_data, y_true = preprocess_input_data(input_data, preprocessor, args.input_file, API_KEY, WEATHER_DIR, DROP_COLUMNS)
+    processed_data, y_true = preprocess_input_data(input_data, preprocessor, API_KEY, WEATHER_DIR, DROP_COLUMNS)
 
     # Make predictions
     predictions = make_predictions(model, processed_data)
